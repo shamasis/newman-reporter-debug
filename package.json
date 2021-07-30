@@ -1,6 +1,6 @@
 {
   "name": "newman-reporter-debug",
-  "version": "1.0.0",
+  "version": "1.0.1-beta.1",
   "description": "A debugging extension for Newman",
   "main": "index.js",
   "scripts": {
@@ -20,5 +20,11 @@
   "bugs": {
     "url": "https://github.com/shamasis/newman-reporter-debug/issues"
   },
-  "homepage": "https://github.com/shamasis/newman-reporter-debug#readme"
+  "homepage": "https://github.com/shamasis/newman-reporter-debug#readme",
+  "dependencies": {
+    "node-memwatcher": "^0.1.4"
+  },
+  "optionalDependencies": {
+    "@airbnb/node-memwatch": "^2.0.0"
+  }
 }
