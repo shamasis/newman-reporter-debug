@@ -1,7 +1,16 @@
+/**
+ * @fileOverview 
+ * 
+ * This is a single flat file for this debug reporter. Everything is crammed into single
+ * closure of the reporter instantiation to allow ease of quick development.
+ * 
+ * Once the complexity of the project increases, will consider cleanup.
+ */
 
 var MemWatcher = require('node-memwatcher'),
     DebugReporter;
 
+// Standard newman reporter construction interface
 DebugReporter = function (newman, reporterOptions, options) {
     const silent = Boolean(reporterOptions.silent),
         verbose = Boolean(reporterOptions.verbose),
