@@ -1,6 +1,6 @@
 {
   "name": "newman-reporter-debug",
-  "version": "1.0.0",
+  "version": "1.0.1.beta.1",
   "description": "A debugging extension for Newman",
   "main": "index.js",
   "scripts": {
