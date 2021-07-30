@@ -1,5 +1,5 @@
-# newman-reporter-debug
-This is a debugging reporter for Newman
+# newman-reporter-debug (ALPHA)
+This is a debugging reporter for Newman.
 
 ## Installation
 
@@ -17,8 +17,16 @@ newman run examples/sample-collection.json -r debug
 newman run examples/sample-collection.json -r cli,debug
 ```
 
-### --reporter-debug-force-clear-run-summary
+### --reporter-debug-silent
+### --reporter-debug-verbose
 
+### --reporter-debug-force-clear-run-summary
 Newman tracks the executions of each and every request so that some reporters can use the same to do
 post-run analyses. `--forceClearRunSummary` stops the recording of this data. Note that this may 
 have adverse effects on other reporters if they depend on this trace data.
+
+### --reporter-debug-trace-memory
+
+#### --reporter-debug-trace-memory-graph
+
+Do enable `--silent` flag to see the graph! Else other reporters and CLI output will interfere!
