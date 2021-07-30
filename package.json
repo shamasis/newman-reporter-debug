@@ -20,5 +20,11 @@
   "bugs": {
     "url": "https://github.com/shamasis/newman-reporter-debug/issues"
   },
-  "homepage": "https://github.com/shamasis/newman-reporter-debug#readme"
+  "homepage": "https://github.com/shamasis/newman-reporter-debug#readme",
+  "dependencies": {
+    "node-memwatcher": "^0.1.4"
+  },
+  "optionalDependencies": {
+    "@airbnb/node-memwatch": "^2.0.0"
+  }
 }
