@@ -7,8 +7,10 @@
  * Once the complexity of the project increases, will consider cleanup.
  */
 
-var MemWatcher = require('node-memwatcher'),
-    DebugReporter;
+const prompts = require('prompts'),
+    MemWatcher = require('node-memwatcher');
+
+var DebugReporter;
 
 // Standard newman reporter construction interface
 DebugReporter = function (newman, reporterOptions, options) {
@@ -20,16 +22,6 @@ DebugReporter = function (newman, reporterOptions, options) {
         // from the reporter initialisation.
         log = silent ? function () {} : function (...args) { console.log(...args); },
         deb = (verbose && !silent) ? function (...args) { console.debug(...args); } : function () {};
-
-    var clearSummaryStack = function (err, cursor) {
-            // setting array lengths to 0 effectively clears the array.
-            // we prefer this than simply replacing the array variable
-            // with new one.
-            newman.summary.run.executions.length = 0;
-            newman.summary.run.failures.length = 0;
-
-            deb("- [debug] cleared run summary executions and failures.");
-        };
 
     // banner to let know that the debugger is active. silent flag will suppress this.
     log("✔ Debug reporter is active.\n");
@@ -80,7 +72,52 @@ DebugReporter = function (newman, reporterOptions, options) {
         log("✔ \`forceClearRunSummary\` will remove execution trace after every request.");
         log("  Note that this may have adverse effects on other reporters if they depend");
         log("  on this trace data.");
-        newman.on('item', clearSummaryStack);
+
+        newman.on('item', function (err) {
+            // setting array lengths to 0 effectively clears the array.
+            // we prefer this than simply replacing the array variable
+            // with new one.
+            try { // putting in try block with abundance of caution
+                newman.summary.run.executions.length = 0;
+                newman.summary.run.failures.length = 0;
+                deb("- [debug] cleared summary stack.");
+            }
+            catch (e) {
+                deb("- [debug] unable to clear summary stack.", e);
+            }            
+        });
+    }
+
+    if (reporterOptions.break) {
+        let run;
+
+        newman.on('start', function (err, args) {
+            run = args && args.run;
+
+            if (!run) {
+                log("\n✔ [warn] Unsupported newman version for breakpoints.");
+                log("\n✔        Upgrade to latest version of newman.");
+            }
+        });
+
+        newman.on('done', function (err, args) {
+            run = null;
+        });
+
+        newman.on('item', function (err, args) {
+            run && run.pause(function () {
+                prompts({
+                    type: 'confirm',
+                    name: 'value',
+                    message: 'Run paused. Continue?',
+                    initial: true
+                }, {
+                    onSubmit: (prompt, answer) => {
+                        run && run.resume();
+                    }
+                });
+            });
+        });
     }
 
     // extra line to separate initialisation output from other reporters.
