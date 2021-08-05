@@ -22,6 +22,7 @@
   },
   "homepage": "https://github.com/shamasis/newman-reporter-debug#readme",
   "dependencies": {
+    "cli-table3": "^0.6.0",
     "node-memwatcher": "^0.1.4",
     "prompts": "^2.4.1"
   },

@@ -8,7 +8,9 @@
  */
 
 const prompts = require('prompts'),
-    MemWatcher = require('node-memwatcher');
+    MemWatcher = require('node-memwatcher'),
+    Table = require('cli-table3'),
+    colors = require('colors');
 
 var DebugReporter;
 
@@ -89,7 +91,127 @@ DebugReporter = function (newman, reporterOptions, options) {
     }
 
     if (reporterOptions.break) {
-        let run;
+        let run,
+            operations,
+            operationHandler,
+
+            latest = {},
+
+            printVariables,
+            printRequest,
+            printResponse;
+
+
+        printVariables = function (varscope, type, json) {
+            !type && (type = '');
+
+            if (!(varscope && varscope.values && varscope.values.members && varscope.values.members)) {
+                log(`✖ Unable to inspect ${type} variables.`);
+                return;
+            }
+
+            if (json) {
+                process.stdout.write(`\n${colors.underline('Current ' + type)}: `);
+                console.dir(varscope.toJSON(), {depth: 4});
+                log('');
+                return;
+            }
+
+            let table = new Table({ head: ["Variable", "Value", "Type"] });
+
+            varscope.values.members.forEach((variable) => {
+                table.push([variable.name || variable.key, variable.value, variable.type]);
+            });
+
+            log(`\n  ${varscope.name ? varscope.name : type} [id:${varscope.id}]`);
+            log(table.toString());
+        };
+
+        printRequest = function (sent, original) {
+
+            // augment the object
+            if (sent.url) {
+                sent.url.raw = sent.url.toString();
+            }
+
+            process.stdout.write(`\n${colors.underline('Last Request Sent')}: `);
+            console.dir(sent.toJSON(), {depth: 4});
+            log('');
+        };
+
+        printResponse = function (received) {
+            let tmp;
+
+            if (received.stream) {
+                received.body = received.text();
+                tmp = received.stream;
+                delete received.stream;
+            }
+
+            process.stdout.write(`\n${colors.underline('Last Response Received')}: `);
+            console.dir(received.toJSON(), {depth: 4});
+            log('');
+
+            if (tmp) {
+                delete received.body;
+                received.stream = tmp;
+                tmp = null;
+            }
+        }
+
+        operations = {
+            type: 'select',
+            name: 'value',
+            message: 'Run paused.',
+            choices: [
+                { title: 'Continue', value: 'continue' },
+                { title: 'Show all environment variables', value: 'allenv' },
+                { title: 'Show all global variables', value: 'allglb' },
+                { title: 'Show Environment', value: 'env' },
+                { title: 'Show Globals', value: 'glb' },
+                { title: 'Show Request', value: 'req' },
+                { title: 'Show Response', value: 'res' },
+                { title: 'Exit', value: 'exit' }
+            ],
+            initial: 0
+        };
+
+        operationHandler = function (prompt, answer) {
+            try {
+                if (answer === 'continue') {
+                    run.resume();
+                }
+                else if (answer === 'allenv') {
+                    printVariables(run.state.environment, 'Environment');
+                    prompts(operations, { onSubmit: operationHandler });
+                }
+                else if (answer === 'allglb') {
+                    printVariables(run.state.globals, 'Globals');;
+                    prompts(operations, { onSubmit: operationHandler });
+                }
+                else if (answer === 'env') {
+                    printVariables(run.state.environment, 'Environment', true);
+                    prompts(operations, { onSubmit: operationHandler });
+                }
+                else if (answer === 'glb') {
+                    printVariables(run.state.globals, 'Globals', true);
+                    prompts(operations, { onSubmit: operationHandler });
+                }
+                else if (answer === 'req') {
+                    printRequest(latest.request.request, latest.beforeRequest);
+                    prompts(operations, { onSubmit: operationHandler });
+                }
+                else if (answer === 'res') {
+                    printResponse(latest.request.response);
+                    prompts(operations, { onSubmit: operationHandler });
+                }
+                else {
+                    run.abort();
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        };
 
         newman.on('start', function (err, args) {
             run = args && args.run;
@@ -97,25 +219,32 @@ DebugReporter = function (newman, reporterOptions, options) {
             if (!run) {
                 log("\n✔ [warn] Unsupported newman version for breakpoints.");
                 log("\n✔        Upgrade to latest version of newman.");
+
+                return;
             }
         });
 
         newman.on('done', function (err, args) {
             run = null;
+            latest = {};
+        });
+
+        newman.on('beforeRequest', function (err, args) {
+            latest.request = null;
+            latest.beforeRequest = args.request;
+        });
+
+        newman.on('request', function (err, args) {
+            latest.request = args;
         });
 
         newman.on('item', function (err, args) {
-            run && run.pause(function () {
-                prompts({
-                    type: 'confirm',
-                    name: 'value',
-                    message: 'Run paused. Continue?',
-                    initial: true
-                }, {
-                    onSubmit: (prompt, answer) => {
-                        run && run.resume();
-                    }
-                });
+            if (!run) {
+                return;
+            }
+
+            run.pause(function () {
+                prompts(operations, { onSubmit: operationHandler });
             });
         });
     }
