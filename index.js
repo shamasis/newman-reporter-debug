@@ -10,7 +10,9 @@
 const prompts = require('prompts'),
     MemWatcher = require('node-memwatcher'),
     Table = require('cli-table3'),
-    colors = require('colors');
+    colors = require('colors')
+
+    symLastCheckedValue = Symbol('LastCheckedValue');
 
 var DebugReporter;
 
@@ -96,10 +98,12 @@ DebugReporter = function (newman, reporterOptions, options) {
             operationHandler,
 
             latest = {},
+            envvars = [],
 
             printVariables,
             printRequest,
-            printResponse;
+            printResponse,
+            showVarDiff;
 
 
         printVariables = function (varscope, type, json) {
@@ -125,6 +129,38 @@ DebugReporter = function (newman, reporterOptions, options) {
 
             log(`\n  ${varscope.name ? varscope.name : type} [id:${varscope.id}]`);
             log(table.toString());
+        };
+
+        showVarDiff = function () {
+            let diff = []; // name, status, scope
+
+            envvars.forEach((v) => {
+                let found = run.state.environment.values.members.find(e => e === v);
+                
+                if (!found) {
+                    diff.push([v.name || v.key, v.value, 'removed', 'environment']);
+                }
+                else if (found.value !== v[symLastCheckedValue]) {
+                    diff.push([v.name || v.key, `${colors.gray.strikethrough(v[symLastCheckedValue])} ${v.value}`, 'updated', 'environment']);
+                }
+            });
+
+            run.state.environment.values.members.forEach((v) => {
+                let found = envvars.find(e => e === v);
+                
+                if (!found) {
+                    diff.push([v.name || v.key, v.value, 'added', 'environment']);
+                }
+            });
+
+            let table = new Table({ head: ["Name", "Value", "State", "Scope"] });
+            if (diff.length) {
+                table.push(...diff);
+            }
+            else {
+                table.push([{colSpan:4,content:'No change in variables discovered.'}]);
+            }
+            console.log(table.toString());
         };
 
         printRequest = function (sent, original) {
@@ -164,7 +200,8 @@ DebugReporter = function (newman, reporterOptions, options) {
             name: 'value',
             message: 'Run paused.',
             choices: [
-                { title: 'Continue', value: 'continue' },
+                { title: 'Continue (break on request)', value: 'continue' },
+                { title: 'Trace environment variables', value: 'vars' },
                 { title: 'Show all environment variables', value: 'allenv' },
                 { title: 'Show all global variables', value: 'allglb' },
                 { title: 'Show Environment', value: 'env' },
@@ -179,14 +216,26 @@ DebugReporter = function (newman, reporterOptions, options) {
         operationHandler = function (prompt, answer) {
             try {
                 if (answer === 'continue') {
+                    envvars = [];
+                    envvars.push(...run.state.environment.values.members);
+                    envvars.forEach((v) => {
+                        v[symLastCheckedValue] = v.value;
+                    });
                     run.resume();
+                }
+                else if (answer === 'vars') {
+                    showVarDiff();
+                    log('')
+                    prompts(operations, { onSubmit: operationHandler });
                 }
                 else if (answer === 'allenv') {
                     printVariables(run.state.environment, 'Environment');
+                    log('')
                     prompts(operations, { onSubmit: operationHandler });
                 }
                 else if (answer === 'allglb') {
-                    printVariables(run.state.globals, 'Globals');;
+                    printVariables(run.state.globals, 'Globals');
+                    log('')
                     prompts(operations, { onSubmit: operationHandler });
                 }
                 else if (answer === 'env') {
@@ -195,14 +244,17 @@ DebugReporter = function (newman, reporterOptions, options) {
                 }
                 else if (answer === 'glb') {
                     printVariables(run.state.globals, 'Globals', true);
+                    log('')
                     prompts(operations, { onSubmit: operationHandler });
                 }
                 else if (answer === 'req') {
                     printRequest(latest.request.request, latest.beforeRequest);
+                    log('')
                     prompts(operations, { onSubmit: operationHandler });
                 }
                 else if (answer === 'res') {
                     printResponse(latest.request.response);
+                    log('')
                     prompts(operations, { onSubmit: operationHandler });
                 }
                 else {
@@ -222,6 +274,22 @@ DebugReporter = function (newman, reporterOptions, options) {
 
                 return;
             }
+        });
+
+        newman.on('beforeIteration', function (err, args) {
+            if (!run) { return; }
+
+            if (run.state.environment) {
+                envvars.push(...run.state.environment.values.members);
+                envvars.forEach((v) => {
+                    v[symLastCheckedValue] = v.value;
+                });
+            }
+
+            run.pause(function () {
+                log('')
+                prompts(operations, { onSubmit: operationHandler });
+            });
         });
 
         newman.on('done', function (err, args) {
@@ -244,6 +312,7 @@ DebugReporter = function (newman, reporterOptions, options) {
             }
 
             run.pause(function () {
+                log('')
                 prompts(operations, { onSubmit: operationHandler });
             });
         });
